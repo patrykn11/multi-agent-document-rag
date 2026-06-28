@@ -1,0 +1,23 @@
+# Runtime dependencies for DocChat.
+# Recommended Python version: 3.11 or 3.12.
+
+chromadb==0.6.3
+docling==2.15.0
+fastapi==0.115.7
+gradio==5.13.2
+gradio-client==1.6.0
+ibm-watsonx-ai==1.2.4
+langchain==0.3.16
+langchain-community==0.3.16
+langchain-ibm==0.3.5
+langchain-openai==0.3.2
+langchain-text-splitters==0.3.5
+langgraph==0.2.68
+loguru==0.7.3
+pydantic==2.10.6
+pydantic-settings==2.7.1
+rank-bm25==0.2.2
+starlette==0.45.3
+
+# Used by test/test1.py.
+pypdf==5.2.0
