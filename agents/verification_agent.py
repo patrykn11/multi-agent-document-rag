@@ -1,9 +1,44 @@
 from typing import Dict, List
+from langchain_core.messages import BaseMessage
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain.schema import Document
 from langchain_openai import ChatOpenAI
 from config.settings import settings
 
 class VerificationAgent:
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            SystemMessagePromptTemplate.from_template(
+                """You are an AI assistant designed to verify the accuracy and relevance of answers based on provided context.
+
+Instructions:
+- Verify the answer against the provided context.
+- Check direct or indirect factual support, unsupported claims, contradictions, and relevance.
+- Provide additional details where relevant.
+- Respond in exactly this format, without unrelated information:
+
+Supported: YES/NO
+Unsupported Claims: [item1, item2, ...]
+Contradictions: [item1, item2, ...]
+Relevant: YES/NO
+Additional Details: [Any extra information or explanations]"""
+            ),
+            HumanMessagePromptTemplate.from_template(
+                """Answer:
+{answer}
+
+Context:
+{context}
+
+Return only the required verification format."""
+            ),
+        ]
+    )
+
     def __init__(self):
         """
         Initialize the verification agent with OpenAI.
@@ -22,59 +57,57 @@ class VerificationAgent:
         """
         return response_text.strip()
 
-    def generate_prompt(self, answer: str, context: str) -> str:
+    @staticmethod
+    def empty_verification(details: str) -> Dict:
+        """Create a consistent negative verification result."""
+        return {
+            "Supported": "NO",
+            "Unsupported Claims": [],
+            "Contradictions": [],
+            "Relevant": "NO",
+            "Additional Details": details,
+        }
+
+    def generate_prompt(self, answer: str, context: str) -> List[BaseMessage]:
         """
-        Generate a structured prompt for the LLM to verify the answer against the context.
+        Generate structured chat messages for answer verification.
         """
-        prompt = f"""
-        You are an AI assistant designed to verify the accuracy and relevance of answers based on provided context.
-
-        **Instructions:**
-        - Verify the following answer against the provided context.
-        - Check for:
-        1. Direct/indirect factual support (YES/NO)
-        2. Unsupported claims (list any if present)
-        3. Contradictions (list any if present)
-        4. Relevance to the question (YES/NO)
-        - Provide additional details or explanations where relevant.
-        - Respond in the exact format specified below without adding any unrelated information.
-
-        **Format:**
-        Supported: YES/NO
-        Unsupported Claims: [item1, item2, ...]
-        Contradictions: [item1, item2, ...]
-        Relevant: YES/NO
-        Additional Details: [Any extra information or explanations]
-
-        **Answer:** {answer}
-        **Context:**
-        {context}
-
-        **Respond ONLY with the above format.**
-        """
-        return prompt
+        return self.prompt_template.format_prompt(
+            answer=answer,
+            context=context,
+        ).to_messages()
 
     def parse_verification_response(self, response_text: str) -> Dict:
         """
         Parse the LLM's verification response into a structured dictionary.
         """
         try:
+            field_names = {
+                name.casefold(): name
+                for name in [
+                    "Supported",
+                    "Unsupported Claims",
+                    "Contradictions",
+                    "Relevant",
+                    "Additional Details",
+                ]
+            }
             lines = response_text.split('\n')
             verification = {}
             for line in lines:
                 if ':' in line:
                     key, value = line.split(':', 1)
-                    key = key.strip().capitalize()
+                    key = field_names.get(key.strip().casefold())
                     value = value.strip()
-                    if key in {"Supported", "Unsupported claims", "Contradictions", "Relevant", "Additional details"}:
-                        if key in {"Unsupported claims", "Contradictions"}:
+                    if key:
+                        if key in {"Unsupported Claims", "Contradictions"}:
                             if value.startswith('[') and value.endswith(']'):
                                 items = value[1:-1].split(',')
                                 items = [item.strip().strip('"').strip("'") for item in items if item.strip()]
                                 verification[key] = items
                             else:
                                 verification[key] = []
-                        elif key == "Additional details":
+                        elif key == "Additional Details":
                             verification[key] = value
                         else:
                             verification[key] = value.upper()
@@ -126,29 +159,18 @@ class VerificationAgent:
         Verify the answer against the provided documents.
         """
         context = "\n\n".join([doc.page_content for doc in documents])
-        prompt = self.generate_prompt(answer, context)
+        messages = self.generate_prompt(answer, context)
         try:
-            response = self.model.invoke(
-                [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
+            response = self.model.invoke(messages)
         except Exception as e:
             raise RuntimeError("Failed to verify answer due to a model error.") from e
 
         try:
             llm_response = response.content.strip()
         except (AttributeError, TypeError):
-            verification_report = {
-                "Supported": "NO",
-                "Unsupported Claims": [],
-                "Contradictions": [],
-                "Relevant": "NO",
-                "Additional Details": "Invalid response structure from the model."
-            }
+            verification_report = self.empty_verification(
+                "Invalid response structure from the model."
+            )
             verification_report_formatted = self.format_verification_report(verification_report)
             return {
                 "verification_report": verification_report_formatted,
@@ -157,23 +179,13 @@ class VerificationAgent:
 
         sanitized_response = self.sanitize_response(llm_response) if llm_response else ""
         if not sanitized_response:
-            verification_report = {
-                "Supported": "NO",
-                "Unsupported Claims": [],
-                "Contradictions": [],
-                "Relevant": "NO",
-                "Additional Details": "Empty response from the model."
-            }
+            verification_report = self.empty_verification("Empty response from the model.")
         else:
             verification_report = self.parse_verification_response(sanitized_response)
             if verification_report is None:
-                verification_report = {
-                    "Supported": "NO",
-                    "Unsupported Claims": [],
-                    "Contradictions": [],
-                    "Relevant": "NO",
-                    "Additional Details": "Failed to parse the model's response."
-                }
+                verification_report = self.empty_verification(
+                    "Failed to parse the model's response."
+                )
 
         verification_report_formatted = self.format_verification_report(verification_report)
 
