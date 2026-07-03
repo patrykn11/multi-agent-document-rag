@@ -60,19 +60,13 @@ class AgentWorkflow:
             k=20
         )
 
-        if classification == "CAN_ANSWER":
+        if classification in {"CAN_ANSWER", "PARTIAL"}:
             return {"is_relevant": True}
 
-        elif classification == "PARTIAL":
-            return {
-                "is_relevant": True
-            }
-
-        else:
-            return {
-                "is_relevant": False,
-                "draft_answer": "This question isn't related (or there's no data) for your query. Please ask another question relevant to the uploaded document(s)."
-            }
+        return {
+            "is_relevant": False,
+            "draft_answer": "This question isn't related (or there's no data) for your query. Please ask another question relevant to the uploaded document(s)."
+        }
 
 
     def _decide_after_relevance_check(self, state: AgentState) -> str:
@@ -80,26 +74,23 @@ class AgentWorkflow:
         return decision
     
     def full_pipeline(self, question: str, retriever: EnsembleRetriever):
-        try:
-            documents = retriever.invoke(question)
+        documents = retriever.invoke(question)
 
-            initial_state = AgentState(
-                question=question,
-                documents=documents,
-                draft_answer="",
-                verification_report="",
-                is_relevant=False,
-                retriever=retriever
-            )
-            
-            final_state = self.compiled_workflow.invoke(initial_state)
-            
-            return {
-                "draft_answer": final_state["draft_answer"],
-                "verification_report": final_state["verification_report"]
-            }
-        except Exception:
-            raise
+        initial_state = AgentState(
+            question=question,
+            documents=documents,
+            draft_answer="",
+            verification_report="",
+            is_relevant=False,
+            retriever=retriever
+        )
+
+        final_state = self.compiled_workflow.invoke(initial_state)
+
+        return {
+            "draft_answer": final_state["draft_answer"],
+            "verification_report": final_state["verification_report"]
+        }
     
     def _research_step(self, state: AgentState) -> Dict:
         result = self.researcher.generate(state["question"], state["documents"])
