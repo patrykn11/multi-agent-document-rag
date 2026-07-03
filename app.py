@@ -104,7 +104,7 @@ def main():
                 if os.path.exists(path):
                     loaded_files.append(path)
                 else:
-                    logger.warning(f"File not found: {path}")
+                    logger.warning("File not found: {}", path)
 
             return loaded_files, question
 
@@ -156,7 +156,7 @@ def _get_file_hashes(uploaded_files: List) -> frozenset:
     hashes = set()
     for file in uploaded_files:
         with open(file.name, "rb") as f:
-            hashes.add(hashlib.sha256(f.read()).hexdigest())
+            hashes.add(hashlib.file_digest(f, "sha256").hexdigest())
     return frozenset(hashes)
 
 if __name__ == "__main__":
