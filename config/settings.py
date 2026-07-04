@@ -11,13 +11,13 @@ class Settings(BaseSettings):
 
     MAX_FILE_SIZE: int = MAX_FILE_SIZE
     MAX_TOTAL_SIZE: int = MAX_TOTAL_SIZE
-    ALLOWED_TYPES: list = ALLOWED_TYPES
+    ALLOWED_TYPES: list[str] = ALLOWED_TYPES
 
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
 
     VECTOR_SEARCH_K: int = 10
-    HYBRID_RETRIEVER_WEIGHTS: list = [0.4, 0.6]
+    HYBRID_RETRIEVER_WEIGHTS: list[float] = [0.4, 0.6]
 
     LOG_LEVEL: str = "INFO"
 

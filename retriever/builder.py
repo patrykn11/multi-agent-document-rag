@@ -19,21 +19,17 @@ class RetrieverBuilder:
         )
     def build_hybrid_retriever(self, docs):
         """Build a hybrid retriever using BM25 and vector-based retrieval."""
-        try:
-            vector_store = Chroma.from_documents(
-                documents=docs,
-                embedding=self.embeddings,
-                persist_directory=settings.CHROMA_DB_PATH,
-                client_settings=ChromaSettings(anonymized_telemetry=False),
-            )
-            bm25 = BM25Retriever.from_documents(docs)
-            
-            vector_retriever = vector_store.as_retriever(search_kwargs={"k": settings.VECTOR_SEARCH_K})
-            
-            hybrid_retriever = EnsembleRetriever(
-                retrievers=[bm25, vector_retriever],
-                weights=settings.HYBRID_RETRIEVER_WEIGHTS
-            )
-            return hybrid_retriever
-        except Exception:
-            raise
+        vector_store = Chroma.from_documents(
+            documents=docs,
+            embedding=self.embeddings,
+            persist_directory=settings.CHROMA_DB_PATH,
+            client_settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        bm25 = BM25Retriever.from_documents(docs)
+
+        vector_retriever = vector_store.as_retriever(search_kwargs={"k": settings.VECTOR_SEARCH_K})
+
+        return EnsembleRetriever(
+            retrievers=[bm25, vector_retriever],
+            weights=settings.HYBRID_RETRIEVER_WEIGHTS
+        )
