@@ -18,6 +18,15 @@ class DocumentProcessor:
         
     def validate_files(self, files: List) -> None:
         """Validate the total size of the uploaded files."""
+        oversized_files = [
+            file.name
+            for file in files
+            if os.path.getsize(file.name) > constants.MAX_FILE_SIZE
+        ]
+        if oversized_files:
+            limit_mb = constants.MAX_FILE_SIZE // 1024 // 1024
+            raise ValueError(f"File size exceeds the {limit_mb}MB limit: {oversized_files[0]}")
+
         total_size = sum(os.path.getsize(f.name) for f in files)
         if total_size > constants.MAX_TOTAL_SIZE:
             raise ValueError(f"Total size exceeds {constants.MAX_TOTAL_SIZE//1024//1024}MB limit")
@@ -47,14 +56,15 @@ class DocumentProcessor:
                         all_chunks.append(chunk)
                         seen_hashes.add(chunk_hash)
                         
-            except Exception:
+            except Exception as error:
+                logger.warning("Failed to process {}: {}", file.name, error)
                 continue
                 
         return all_chunks
 
     def _process_file(self, file) -> List:
         """Original processing logic with Docling"""
-        if not file.name.endswith(('.pdf', '.docx', '.txt', '.md')):
+        if Path(file.name).suffix.lower() not in constants.ALLOWED_TYPES:
             logger.warning(f"Skipping unsupported file type: {file.name}")
             return []
 
